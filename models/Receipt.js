@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const receiptSchema = new mongoose.Schema({
+  store: { type: String, default: 'Unknown Store' }, // <-- NEW FIELD ADDED HERE
   date: { type: Date, default: Date.now },
   totalPrice: { type: Number, required: true },
   items: [

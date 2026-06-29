@@ -53,6 +53,9 @@ router.post('/add', async (req, res) => {
 // 3. CHECKOUT: Archive to Receipt and empty the basket
 router.post('/checkout', async (req, res) => {
   try {
+    // NEW: Capture the store name sent from the frontend
+    const { store } = req.body;
+
     const basket = await Basket.findOne().populate('items.productId');
     
     // Safety check
@@ -67,8 +70,9 @@ router.post('/checkout', async (req, res) => {
       quantity: item.quantity
     }));
 
-    // Save the new permanent receipt
+    // Save the new permanent receipt WITH the store name included
     const newReceipt = new Receipt({
+      store: store || 'Unknown Store', // <-- NEW: Saves the store location
       items: receiptItems,
       totalPrice: basket.totalPrice
     });
