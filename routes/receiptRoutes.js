@@ -12,4 +12,18 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Update a receipt's store name
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedReceipt = await Receipt.findByIdAndUpdate(
+      req.params.id,
+      { store: req.body.store },
+      { new: true } // Returns the updated document
+    );
+    res.json(updatedReceipt);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
