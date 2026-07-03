@@ -3,7 +3,7 @@ const router = express.Router();
 const Basket = require('../models/Basket');
 const Product = require('../models/Product');
 const Receipt = require('../models/Receipt'); 
-const auth = require('../middleware/auth'); // <-- The Bouncer we just created
+const auth = require('../middleware/auth.js'); // <-- The Bouncer we just created
 
 // 1. Fetch the active basket list FOR THIS SPECIFIC USER
 router.get('/', auth, async (req, res) => {

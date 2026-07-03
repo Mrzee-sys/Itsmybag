@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Receipt = require('../models/Receipt');
+const auth = require('../middleware/auth.js'); // Updated with .js extension for explicit loading
+
 
 // Get all past shopping trips, sorted by newest first
 router.get('/', async (req, res) => {
