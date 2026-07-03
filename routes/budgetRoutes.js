@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const BudgetItem = require('../models/BudgetItem');
-const auth = require('../middleware/auth'); // <-- The Bouncer!
+const auth = require('../middleware/auth.js'); // Updated with .js extension for explicit loading
 
 // Get all budget items for the LOGGED IN USER
 router.get('/', auth, async (req, res) => {
@@ -18,7 +18,7 @@ router.post('/', auth, async (req, res) => {
   const { personName, itemName, amount, type } = req.body;
   try {
     const newItem = new BudgetItem({ 
-      userId: req.user.id, // <-- Fences data to the user
+      userId: req.user.id, 
       personName, 
       itemName, 
       amount,
@@ -44,20 +44,21 @@ router.put('/:id', auth, async (req, res) => {
       },
       { new: true }
     );
+    if (!updatedItem) return res.status(404).json({ message: 'Item not found' });
     res.json(updatedItem);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// Monthly Reset 
+// Monthly Reset: Sets all expenses for a person back to unpaid
 router.post('/reset/:personName', auth, async (req, res) => {
   try {
-    await BudgetItem.updateMany(
+    const result = await BudgetItem.updateMany(
       { userId: req.user.id, personName: req.params.personName, type: 'expense' },
       { isPaid: false }
     );
-    res.json({ message: 'Monthly reset successful' });
+    res.json({ message: 'Monthly reset successful', modifiedCount: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -66,18 +67,19 @@ router.post('/reset/:personName', auth, async (req, res) => {
 // Delete a single item
 router.delete('/:id', auth, async (req, res) => {
   try {
-    await BudgetItem.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    const deletedItem = await BudgetItem.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!deletedItem) return res.status(404).json({ message: 'Item not found' });
     res.json({ message: 'Budget item deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// NEW: Delete an ENTIRE family member and all their items
+// Delete an ENTIRE family member and all their items
 router.delete('/person/:personName', auth, async (req, res) => {
   try {
-    await BudgetItem.deleteMany({ userId: req.user.id, personName: req.params.personName });
-    res.json({ message: 'Family member deleted' });
+    const result = await BudgetItem.deleteMany({ userId: req.user.id, personName: req.params.personName });
+    res.json({ message: 'Family member deleted', deletedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
