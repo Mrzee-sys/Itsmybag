@@ -18,7 +18,12 @@ const BasketItemSchema = new mongoose.Schema({
 });
 
 const BasketSchema = new mongoose.Schema({
-  // Tied to a simple household ID or shared space later for you and your wife
+  // NEW: Locks this basket to the specific logged-in user
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   items: [BasketItemSchema],
   totalPrice: {
     type: Number,
