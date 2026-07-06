@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const BudgetItem = require('../models/BudgetItem');
-const auth = require('../middleware/auth.js'); // Updated with .js extension for explicit loading
+const auth = require('../middleware/auth.js'); 
 
 // Get all budget items for the LOGGED IN USER
 router.get('/', auth, async (req, res) => {
@@ -15,14 +15,16 @@ router.get('/', auth, async (req, res) => {
 
 // Add a new budget item
 router.post('/', auth, async (req, res) => {
-  const { personName, itemName, amount, type } = req.body;
+  // NEW: Added category to the extracted body data
+  const { personName, itemName, amount, type, category } = req.body;
   try {
     const newItem = new BudgetItem({ 
       userId: req.user.id, 
       personName, 
       itemName, 
       amount,
-      type: type || 'expense' 
+      type: type || 'expense',
+      category: category || 'General' // NEW: Save the category
     });
     await newItem.save();
     res.status(201).json(newItem);
@@ -40,7 +42,8 @@ router.put('/:id', auth, async (req, res) => {
         itemName: req.body.itemName, 
         amount: req.body.amount,
         type: req.body.type,
-        isPaid: req.body.isPaid 
+        isPaid: req.body.isPaid,
+        category: req.body.category // NEW: Update the category
       },
       { new: true }
     );
