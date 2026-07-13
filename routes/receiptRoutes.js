@@ -11,9 +11,14 @@ router.get('/', auth, async (req, res) => {
   try {
     let query = {};
     
-    // If NOT an admin, only show receipts belonging to this user
+    // If NOT an admin, filter by the user's ID OR show legacy records (no userId)
     if (!ADMIN_EMAILS.includes(req.user.email)) {
-      query = { userId: req.user.id };
+      query = { 
+        $or: [
+          { userId: req.user.id },
+          { userId: { $exists: false } } // Include legacy data so user's history isn't empty
+        ] 
+      };
     }
     
     const receipts = await Receipt.find(query).sort({ date: -1 });
@@ -26,7 +31,7 @@ router.get('/', auth, async (req, res) => {
 // Update a receipt's store name
 router.put('/:id', auth, async (req, res) => {
   try {
-    // Only allow updates if the user owns the receipt OR is an admin
+    // Admins can edit any receipt; others only their own
     const query = ADMIN_EMAILS.includes(req.user.email) 
       ? { _id: req.params.id } 
       : { _id: req.params.id, userId: req.user.id };
@@ -89,7 +94,7 @@ router.post('/:id/move-item', auth, async (req, res) => {
     let targetReceipt = await Receipt.findOne({
       store: newStore,
       date: { $gte: startOfDay, $lte: endOfDay },
-      userId: oldReceipt.userId // Ensure it stays within the same user's records
+      userId: oldReceipt.userId
     });
 
     if (targetReceipt) {
