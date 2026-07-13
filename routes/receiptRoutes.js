@@ -1,13 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const Receipt = require('../models/Receipt');
-const auth = require('../middleware/auth.js'); 
+const auth = require('../middleware/auth.js');
 
-// Get all past shopping trips, sorted by newest first
+// Admin emails allowed to see all household history
+const ADMIN_EMAILS = ['shaunzurcher@gmail.com', 'carriezurcher@gmail.com'];
+
+// Get past shopping trips
 router.get('/', auth, async (req, res) => {
   try {
-    // Fetches all receipts so the frontend can filter by "My Trips" or "Household"
-    const receipts = await Receipt.find().sort({ date: -1 });
+    let query = {};
+    
+    // If NOT an admin, only show receipts belonging to this user
+    if (!ADMIN_EMAILS.includes(req.user.email)) {
+      query = { userId: req.user.id };
+    }
+    
+    const receipts = await Receipt.find(query).sort({ date: -1 });
     res.json(receipts);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -17,11 +26,18 @@ router.get('/', auth, async (req, res) => {
 // Update a receipt's store name
 router.put('/:id', auth, async (req, res) => {
   try {
-    const updatedReceipt = await Receipt.findByIdAndUpdate(
-      req.params.id,
+    // Only allow updates if the user owns the receipt OR is an admin
+    const query = ADMIN_EMAILS.includes(req.user.email) 
+      ? { _id: req.params.id } 
+      : { _id: req.params.id, userId: req.user.id };
+
+    const updatedReceipt = await Receipt.findOneAndUpdate(
+      query,
       { store: req.body.store },
       { new: true } 
     );
+    
+    if (!updatedReceipt) return res.status(404).json({ message: 'Receipt not found or unauthorized' });
     res.json(updatedReceipt);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -31,7 +47,13 @@ router.put('/:id', auth, async (req, res) => {
 // Delete an entire receipt
 router.delete('/:id', auth, async (req, res) => {
   try {
-    await Receipt.findByIdAndDelete(req.params.id);
+    const query = ADMIN_EMAILS.includes(req.user.email) 
+      ? { _id: req.params.id } 
+      : { _id: req.params.id, userId: req.user.id };
+
+    const deleted = await Receipt.findOneAndDelete(query);
+    if (!deleted) return res.status(404).json({ message: 'Receipt not found or unauthorized' });
+    
     res.json({ message: 'Receipt deleted completely' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -42,22 +64,23 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/move-item', auth, async (req, res) => {
   try {
     const { itemIndex, newStore } = req.body;
-    const oldReceipt = await Receipt.findById(req.params.id);
     
-    if (!oldReceipt) return res.status(404).json({ message: "Receipt not found" });
+    const query = ADMIN_EMAILS.includes(req.user.email) 
+      ? { _id: req.params.id } 
+      : { _id: req.params.id, userId: req.user.id };
+
+    const oldReceipt = await Receipt.findOne(query);
     
-    // Extract the item
+    if (!oldReceipt) return res.status(404).json({ message: "Receipt not found or unauthorized" });
+    
     const itemToMove = oldReceipt.items[itemIndex];
     if (!itemToMove) return res.status(404).json({ message: "Item not found" });
 
-    // Calculate the item's total cost to adjust receipt totals
     const itemTotal = itemToMove.price * itemToMove.quantity;
 
-    // Remove item from old receipt and reduce total
     oldReceipt.items.splice(itemIndex, 1);
     oldReceipt.totalPrice -= itemTotal;
 
-    // Check if a receipt already exists for this new store on the same day
     const startOfDay = new Date(oldReceipt.date);
     startOfDay.setHours(0,0,0,0);
     const endOfDay = new Date(oldReceipt.date);
@@ -65,18 +88,17 @@ router.post('/:id/move-item', auth, async (req, res) => {
 
     let targetReceipt = await Receipt.findOne({
       store: newStore,
-      date: { $gte: startOfDay, $lte: endOfDay }
+      date: { $gte: startOfDay, $lte: endOfDay },
+      userId: oldReceipt.userId // Ensure it stays within the same user's records
     });
 
     if (targetReceipt) {
-      // Merge into the existing receipt for that store
       targetReceipt.items.push(itemToMove);
       targetReceipt.totalPrice += itemTotal;
       await targetReceipt.save();
     } else {
-      // Spin it off into a brand new receipt for that day
       targetReceipt = new Receipt({
-        userId: req.user.id,
+        userId: oldReceipt.userId,
         personName: oldReceipt.personName,
         store: newStore,
         date: oldReceipt.date, 
@@ -86,7 +108,6 @@ router.post('/:id/move-item', auth, async (req, res) => {
       await targetReceipt.save();
     }
 
-    // If the old receipt is empty now, delete it to keep things clean
     if (oldReceipt.items.length === 0) {
       await Receipt.findByIdAndDelete(oldReceipt._id);
     } else {
