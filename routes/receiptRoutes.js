@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Receipt = require('../models/Receipt');
-const auth = require('../middleware/auth.js'); // Updated with .js extension for explicit loading
-
+const auth = require('../middleware/auth.js'); 
 
 // Get all past shopping trips, sorted by newest first
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
+    // Fetches all receipts so the frontend can filter by "My Trips" or "Household"
     const receipts = await Receipt.find().sort({ date: -1 });
     res.json(receipts);
   } catch (err) {
@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
 });
 
 // Update a receipt's store name
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
     const updatedReceipt = await Receipt.findByIdAndUpdate(
       req.params.id,
@@ -28,8 +28,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// NEW: Delete an entire receipt
-router.delete('/:id', async (req, res) => {
+// Delete an entire receipt
+router.delete('/:id', auth, async (req, res) => {
   try {
     await Receipt.findByIdAndDelete(req.params.id);
     res.json({ message: 'Receipt deleted completely' });
@@ -38,8 +38,8 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// NEW: Move an item to a different store (Splits the receipt)
-router.post('/:id/move-item', async (req, res) => {
+// Move an item to a different store (Splits the receipt)
+router.post('/:id/move-item', auth, async (req, res) => {
   try {
     const { itemIndex, newStore } = req.body;
     const oldReceipt = await Receipt.findById(req.params.id);
@@ -76,6 +76,8 @@ router.post('/:id/move-item', async (req, res) => {
     } else {
       // Spin it off into a brand new receipt for that day
       targetReceipt = new Receipt({
+        userId: req.user.id,
+        personName: oldReceipt.personName,
         store: newStore,
         date: oldReceipt.date, 
         totalPrice: itemTotal,
