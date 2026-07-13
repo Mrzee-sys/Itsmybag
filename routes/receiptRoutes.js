@@ -11,12 +11,13 @@ router.get('/', auth, async (req, res) => {
   try {
     let query = {};
     
-    // If NOT an admin, filter by the user's ID OR show legacy records (no userId)
+    // If NOT an admin, show their own receipts OR receipts with no userId (Legacy)
     if (!ADMIN_EMAILS.includes(req.user.email)) {
       query = { 
         $or: [
           { userId: req.user.id },
-          { userId: { $exists: false } } // Include legacy data so user's history isn't empty
+          { userId: { $exists: false } },
+          { userId: null }
         ] 
       };
     }
@@ -31,10 +32,11 @@ router.get('/', auth, async (req, res) => {
 // Update a receipt's store name
 router.put('/:id', auth, async (req, res) => {
   try {
-    // Admins can edit any receipt; others only their own
-    const query = ADMIN_EMAILS.includes(req.user.email) 
+    const isAdmin = ADMIN_EMAILS.includes(req.user.email);
+    // Allow update if admin OR user owns the document
+    const query = isAdmin 
       ? { _id: req.params.id } 
-      : { _id: req.params.id, userId: req.user.id };
+      : { _id: req.params.id, $or: [{ userId: req.user.id }, { userId: { $exists: false } }] };
 
     const updatedReceipt = await Receipt.findOneAndUpdate(
       query,
@@ -52,9 +54,10 @@ router.put('/:id', auth, async (req, res) => {
 // Delete an entire receipt
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const query = ADMIN_EMAILS.includes(req.user.email) 
+    const isAdmin = ADMIN_EMAILS.includes(req.user.email);
+    const query = isAdmin 
       ? { _id: req.params.id } 
-      : { _id: req.params.id, userId: req.user.id };
+      : { _id: req.params.id, $or: [{ userId: req.user.id }, { userId: { $exists: false } }] };
 
     const deleted = await Receipt.findOneAndDelete(query);
     if (!deleted) return res.status(404).json({ message: 'Receipt not found or unauthorized' });
@@ -69,10 +72,11 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/move-item', auth, async (req, res) => {
   try {
     const { itemIndex, newStore } = req.body;
+    const isAdmin = ADMIN_EMAILS.includes(req.user.email);
     
-    const query = ADMIN_EMAILS.includes(req.user.email) 
+    const query = isAdmin 
       ? { _id: req.params.id } 
-      : { _id: req.params.id, userId: req.user.id };
+      : { _id: req.params.id, $or: [{ userId: req.user.id }, { userId: { $exists: false } }] };
 
     const oldReceipt = await Receipt.findOne(query);
     
@@ -91,10 +95,11 @@ router.post('/:id/move-item', auth, async (req, res) => {
     const endOfDay = new Date(oldReceipt.date);
     endOfDay.setHours(23,59,59,999);
 
+    // Target existing receipt for this store on this day
     let targetReceipt = await Receipt.findOne({
       store: newStore,
       date: { $gte: startOfDay, $lte: endOfDay },
-      userId: oldReceipt.userId
+      userId: oldReceipt.userId || req.user.id // Handle legacy missing userId
     });
 
     if (targetReceipt) {
@@ -103,8 +108,8 @@ router.post('/:id/move-item', auth, async (req, res) => {
       await targetReceipt.save();
     } else {
       targetReceipt = new Receipt({
-        userId: oldReceipt.userId,
-        personName: oldReceipt.personName,
+        userId: req.user.id, // Assign current user ID
+        personName: oldReceipt.personName || req.user.email.split('@')[0],
         store: newStore,
         date: oldReceipt.date, 
         totalPrice: itemTotal,
