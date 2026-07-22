@@ -19,8 +19,10 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/basket', require('./routes/basketRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/receipts', require('./routes/receiptRoutes')); // <-- NEW: Added Receipt/History Routes
-app.use('/api/budget', require('./routes/budgetRoutes')); // <-- NEW: Added Budget Routes
+app.use('/api/receipts', require('./routes/receiptRoutes')); 
+app.use('/api/budget', require('./routes/budgetRoutes')); 
+app.use('/api/loyalty-cards', require('./routes/loyaltyCardRoutes')); // <-- NEW: Added Loyalty Cards Routes
+
 app.get('/', (req, res) => {
   res.send('Shopping List API Backend is Running...');
 });
